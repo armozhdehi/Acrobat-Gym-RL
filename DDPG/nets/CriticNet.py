@@ -101,7 +101,7 @@ class CriticNet(Model):
         self.load_weights(self.model_file)
 
 # Example usage:
-config = CriticNetworkConfig(
+config = CriticNetConfig(
     learning_rate=0.001,
     input_dim=8,
     fc1_units=400,
@@ -109,4 +109,4 @@ config = CriticNetworkConfig(
     action_dim=2,
     model_file='critic.h5'
 )
-critic = CriticNetwork(config)
+critic = CriticNet(config)

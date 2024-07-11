@@ -97,7 +97,7 @@ class ActorNet(Model):
         self.load_weights(self.model_file)
 
 # Example usage:
-config = ActorNetworkConfig(
+config = ActorNetConfig(
     learning_rate=0.001,
     input_dim=8,
     fc1_units=400,
@@ -105,4 +105,4 @@ config = ActorNetworkConfig(
     action_dim=2,
     model_file='actor.h5'
 )
-actor = ActorNetwork(config)
+actor = ActorNet(config)
