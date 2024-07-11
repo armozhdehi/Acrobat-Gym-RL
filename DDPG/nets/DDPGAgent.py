@@ -2,10 +2,74 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras.optimizers import Adam
+from pydantic import BaseModel, Field
 from ActorNetwork import ActorNetwork, ActorNetworkConfig
 from CriticNetwork import CriticNetwork, CriticNetworkConfig
-from OU_Noise import OU_Noise
 from Memory import Memory
+
+class OUNoiseConfig(BaseModel):
+    """
+    Configuration for OU Noise.
+
+    Attributes:
+        mu (np.ndarray): Mean of the noise process.
+        sigma (float): Volatility parameter (default 0.5).
+        theta (float): Speed of mean reversion (default 0.2).
+        dt (float): Time step (default 0.01).
+        x0 (Optional[np.ndarray]): Initial value of the noise process (default None).
+    """
+    mu: np.ndarray
+    sigma: float = Field(default=0.5, gt=0)
+    theta: float = Field(default=0.2, gt=0)
+    dt: float = Field(default=1e-2, gt=0)
+    x0: Optional[np.ndarray] = None
+
+class OUNoise:
+    """
+    Ornstein-Uhlenbeck process for generating temporally correlated noise.
+
+    Attributes:
+        mu (np.ndarray): Mean of the noise process.
+        sigma (float): Volatility parameter.
+        theta (float): Speed of mean reversion.
+        dt (float): Time step.
+        x0 (Optional[np.ndarray]): Initial value of the noise process.
+        x_prev (np.ndarray): Previous value of the noise process.
+    """
+
+    def __init__(self, config: OUNoiseConfig):
+        """
+        Initialize the OU Noise process.
+
+        Args:
+            config (OUNoiseConfig): Configuration object for the OU Noise process.
+        """
+        self.mu = config.mu
+        self.sigma = config.sigma
+        self.theta = config.theta
+        self.dt = config.dt
+        self.x0 = config.x0
+        
+        self.reset()
+
+    def __call__(self):
+        """
+        Generate the next value of the noise process.
+
+        Returns:
+            np.ndarray: Next value of the noise process.
+        """
+        diff = self.mu - self.x_prev
+        rnd = np.random.normal(size=self.mu.shape)
+        x = self.x_prev + self.theta * self.dt * diff + self.sigma * np.sqrt(self.dt) * rnd
+        self.x_prev = x
+        return x
+    
+    def reset(self):
+        """
+        Reset the noise process to the initial value.
+        """
+        self.x_prev = self.x0 if self.x0 is not None else np.zeros_like(self.mu)
 
 class DDPGAgentConfig(BaseModel):
     """
@@ -49,7 +113,9 @@ class DDPGAgent:
         self.tau = config.tau
         
         self.memory = Memory(config.memory_size, config.input_dim, config.action_dim)
-        self.noise = OU_Noise(mu = np.zeros(config.action_dim))
+        
+        noise_config = OUNoiseConfig(mu = np.zeros(config.action_dim))
+        self.noise = OUNoise(noise_config)
         
         actor_config = ActorNetworkConfig(
             learning_rate=config.actor_lr,
@@ -102,22 +168,22 @@ class DDPGAgent:
         if self.memory.index < self.batch_size:
             return
         
-        states, actions, rewards, states_, dones = self.memory.sample(self.batch_size)
+        states, actions, rewards, next_states, dones = self.memory.sample(self.batch_size)
         
         states = tf.convert_to_tensor(states, dtype=tf.float32)
         actions = tf.convert_to_tensor(actions, dtype=tf.float32)
         rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
-        states_ = tf.convert_to_tensor(states_, dtype=tf.float32)
+        next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
         dones = tf.convert_to_tensor(dones, dtype=tf.float32)
         
-        target_actions_ = self.target_actor(states_)
-        target_Q_values_ = self.target_critic(states_, target_actions_)
+        target_actions = self.target_actor(next_states)
+        target_Q_values = self.target_critic(next_states, target_actions)
         online_Q_values = self.online_critic(states, actions)
         
-        target_Q_values_[dones] = 0.0
-        target_Q_values_ = tf.squeeze(target_Q_values_)
+        target_Q_values = tf.where(dones, tf.zeros_like(target_Q_values), target_Q_values)
+        target_Q_values = tf.squeeze(target_Q_values)
         
-        target = rewards + self.gamma * target_Q_values_
+        target = rewards + self.gamma * target_Q_values
         
         with tf.GradientTape() as tape:
             critic_loss = tf.keras.losses.MSE(target, tf.squeeze(online_Q_values))
@@ -142,21 +208,3 @@ class DDPGAgent:
         for target_param, online_param in zip(self.target_critic.trainable_variables, self.online_critic.trainable_variables):
             target_param.assign(tau * online_param + (1 - tau) * target_param)
 
-# Example usage:
-config = DDPGAgentConfig(
-    actor_lr=0.001,
-    critic_lr=0.002,
-    gamma=0.99,
-    tau=0.005,
-    input_dim=8,
-    fc1_units=400,
-    fc2_units=300,
-    action_dim=2,
-    memory_size=1000000,
-    batch_size=64,
-    actor_model_file='online_actor.h5',
-    critic_model_file='online_critic.h5',
-    target_actor_model_file='target_actor.h5',
-    target_critic_model_file='target_critic.h5'
-)
-agent = DDPGAgent(config)
