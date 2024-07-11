@@ -6,6 +6,15 @@ from pydantic import BaseModel, Field, validator
 class CriticNetConfig(BaseModel):
     """
     Configuration for Critic Network.
+
+    
+    Attributes:
+        learning_rate (float): Learning rate for the optimizer.
+        input_dim (int): Dimension of the input layer.
+        fc1_units (int): Number of units in the first fully connected layer.
+        fc2_units (int): Number of units in the second fully connected layer.
+        action_dim (int): Dimension of the action space.
+        model_file (str): File path for saving and loading the model weights.
     """
     learning_rate: float = Field(..., gt=0)
     input_dim: int = Field(..., gt=0)
