@@ -2,10 +2,11 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras.optimizers import Adam
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional
 from ActorNet import ActorNet, ActorNetConfig
 from CriticNet import CriticNet, CriticNetConfig
-from Memory import Memory
+from Memory import Memory, MemoryConfig
 
 class OUNoiseConfig(BaseModel):
     """
@@ -18,6 +19,7 @@ class OUNoiseConfig(BaseModel):
         dt (float): Time step (default 0.01).
         x0 (Optional[np.ndarray]): Initial value of the noise process (default None).
     """
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     mu: np.ndarray
     sigma: float = Field(default=0.5, gt=0)
     theta: float = Field(default=0.2, gt=0)
@@ -91,6 +93,7 @@ class DDPGAgentConfig(BaseModel):
         target_actor_model_file (str): File path for saving and loading the target actor model weights.
         target_critic_model_file (str): File path for saving and loading the target critic model weights.
     """
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     actor_lr: float = Field(..., gt=0)
     critic_lr: float = Field(..., gt=0)
     gamma: float = Field(..., gt=0)
@@ -108,11 +111,12 @@ class DDPGAgentConfig(BaseModel):
 
 class DDPGAgent:
     def __init__(self, config: DDPGAgentConfig):
+        self.config = config  # Store config for access in other methods
         self.gamma = config.gamma
         self.batch_size = config.batch_size
         self.tau = config.tau
         
-        self.memory = Memory(config.memory_size, config.input_dim, config.action_dim)
+        self.memory = Memory(MemoryConfig(size=config.memory_size, input_dim=(config.input_dim,), action_dim=config.action_dim))
         
         noise_config = OUNoiseConfig(mu = np.zeros(config.action_dim))
         self.noise = OUNoise(noise_config)
@@ -171,14 +175,16 @@ class DDPGAgent:
         states, actions, rewards, next_states, dones = self.memory.sample(self.batch_size)
         
         states = tf.convert_to_tensor(states, dtype=tf.float32)
-        actions = tf.convert_to_tensor(actions, dtype=tf.float32)
+        actions = tf.one_hot(actions, self.config.action_dim, dtype=tf.float32)  # Convert actions to one-hot encoding
         rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
         next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
-        dones = tf.convert_to_tensor(dones, dtype=tf.float32)
+        dones = tf.convert_to_tensor(dones, dtype=tf.bool)  # Ensure dones is boolean
+        
+        print(f'states: {states.shape}, actions: {actions.shape}, rewards: {rewards.shape}, next_states: {next_states.shape}, dones: {dones.shape}')
         
         target_actions = self.target_actor(next_states)
-        target_Q_values = self.target_critic(next_states, target_actions)
-        online_Q_values = self.online_critic(states, actions)
+        target_Q_values = self.target_critic([next_states, target_actions])
+        online_Q_values = self.online_critic([states, actions])
         
         target_Q_values = tf.where(dones, tf.zeros_like(target_Q_values), target_Q_values)
         target_Q_values = tf.squeeze(target_Q_values)
@@ -188,12 +194,14 @@ class DDPGAgent:
         with tf.GradientTape() as tape:
             critic_loss = tf.keras.losses.MSE(target, tf.squeeze(online_Q_values))
         critic_grads = tape.gradient(critic_loss, self.online_critic.trainable_variables)
+        print(f'critic_grads: {critic_grads}')
         self.online_critic.optimizer.apply_gradients(zip(critic_grads, self.online_critic.trainable_variables))
 
         with tf.GradientTape() as tape:
             actions_pred = self.online_actor(states)
-            actor_loss = -tf.reduce_mean(self.online_critic(states, actions_pred))
+            actor_loss = -tf.reduce_mean(self.online_critic([states, actions_pred]))
         actor_grads = tape.gradient(actor_loss, self.online_actor.trainable_variables)
+        print(f'actor_grads: {actor_grads}')
         self.online_actor.optimizer.apply_gradients(zip(actor_grads, self.online_actor.trainable_variables))
         
         self.update_targets()
@@ -207,4 +215,3 @@ class DDPGAgent:
             
         for target_param, online_param in zip(self.target_critic.trainable_variables, self.online_critic.trainable_variables):
             target_param.assign(tau * online_param + (1 - tau) * target_param)
-

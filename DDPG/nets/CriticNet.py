@@ -7,7 +7,6 @@ class CriticNetConfig(BaseModel):
     """
     Configuration for Critic Network.
 
-    
     Attributes:
         learning_rate (float): Learning rate for the optimizer.
         input_dim (int): Dimension of the input layer.
@@ -52,17 +51,17 @@ class CriticNet(Model):
         self.optimizer = optimizers.Adam(learning_rate=config.learning_rate, decay=0.01)
         self.model_file = config.model_file
     
-    def call(self, state, action):
+    def call(self, inputs):
         """
         Forward pass through the network.
 
         Args:
-            state (tf.Tensor): Input state tensor.
-            action (tf.Tensor): Input action tensor.
+            inputs (list): List containing state and action tensors.
 
         Returns:
             tf.Tensor: Q-value predictions.
         """
+        state, action = inputs
         s = self.fc1(state)
         s = self.ln1(s)
         s = tf.nn.relu(s)
@@ -99,14 +98,3 @@ class CriticNet(Model):
         """
         print(f'Loading {self.model_file}...')
         self.load_weights(self.model_file)
-
-# Example usage:
-config = CriticNetConfig(
-    learning_rate=0.001,
-    input_dim=8,
-    fc1_units=400,
-    fc2_units=300,
-    action_dim=2,
-    model_file='critic.h5'
-)
-critic = CriticNet(config)
