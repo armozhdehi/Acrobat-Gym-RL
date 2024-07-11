@@ -3,8 +3,8 @@ import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras.optimizers import Adam
 from pydantic import BaseModel, Field
-from ActorNetwork import ActorNetwork, ActorNetworkConfig
-from CriticNetwork import CriticNetwork, CriticNetworkConfig
+from ActorNet import ActorNet, ActorNetConfig
+from CriticNet import CriticNet, CriticNetConfig
 from Memory import Memory
 
 class OUNoiseConfig(BaseModel):
@@ -117,7 +117,7 @@ class DDPGAgent:
         noise_config = OUNoiseConfig(mu = np.zeros(config.action_dim))
         self.noise = OUNoise(noise_config)
         
-        actor_config = ActorNetworkConfig(
+        actor_config = ActorNetConfig(
             learning_rate=config.actor_lr,
             input_dim=config.input_dim,
             fc1_units=config.fc1_units,
@@ -126,7 +126,7 @@ class DDPGAgent:
             model_file=config.actor_model_file
         )
         
-        critic_config = CriticNetworkConfig(
+        critic_config = CriticNetConfig(
             learning_rate=config.critic_lr,
             input_dim=config.input_dim,
             fc1_units=config.fc1_units,
@@ -135,14 +135,14 @@ class DDPGAgent:
             model_file=config.critic_model_file
         )
         
-        self.online_actor = ActorNetwork(actor_config)
-        self.online_critic = CriticNetwork(critic_config)
+        self.online_actor = ActorNet(actor_config)
+        self.online_critic = CriticNet(critic_config)
         
         target_actor_config = actor_config.copy(update={'model_file': config.target_actor_model_file})
         target_critic_config = critic_config.copy(update={'model_file': config.target_critic_model_file})
         
-        self.target_actor = ActorNetwork(target_actor_config)
-        self.target_critic = CriticNetwork(target_critic_config)
+        self.target_actor = ActorNet(target_actor_config)
+        self.target_critic = CriticNet(target_critic_config)
         
         self.update_targets(tau = 1)
         
