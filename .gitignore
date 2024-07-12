@@ -1,2 +1,15 @@
-wandb/
+__pycache__/
+__pycache__/*
+*.py
 mlruns/
+mlruns/*
+*.ipynb_checkpoints/
+*.ipynb_checkpoints/*
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
+wandb/
+wandb/*
