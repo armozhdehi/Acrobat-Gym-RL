@@ -41,14 +41,14 @@ class CriticNet(Model):
             config (CriticNetConfig): Configuration object for the Critic Network.
         """
         super(CriticNet, self).__init__()
-        self.fc1 = layers.Dense(config.fc1_units, input_shape=(config.input_dim,), kernel_initializer=self.init_weights(config.input_dim))
+        self.fc1 = layers.Dense(config.fc1_units, kernel_initializer=self.init_weights(config.input_dim))
         self.ln1 = layers.LayerNormalization()
         self.fc2 = layers.Dense(config.fc2_units, kernel_initializer=self.init_weights(config.fc1_units))
         self.ln2 = layers.LayerNormalization()
         self.action_layer = layers.Dense(config.fc2_units, kernel_initializer=self.init_weights(config.action_dim))
         self.Q_value = layers.Dense(1, kernel_initializer=tf.random_uniform_initializer(minval=-0.003, maxval=0.003))
         
-        self.optimizer = optimizers.Adam(learning_rate=config.learning_rate, decay=0.01)
+        self.optimizer = optimizers.Adam(learning_rate=config.learning_rate)
         self.model_file = config.model_file
     
     def call(self, inputs):

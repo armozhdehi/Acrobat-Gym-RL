@@ -132,7 +132,7 @@ class DDPGAgent:
         
         critic_config = CriticNetConfig(
             learning_rate=config.critic_lr,
-            input_dim=config.input_dim,
+            input_dim=config.input_dim + config.action_dim,
             fc1_units=config.fc1_units,
             fc2_units=config.fc2_units,
             action_dim=config.action_dim,
@@ -154,7 +154,7 @@ class DDPGAgent:
         state = tf.convert_to_tensor(state[np.newaxis, :], dtype=tf.float32)
         mu = self.online_actor(state)
         mu += tf.convert_to_tensor(self.noise(), dtype=tf.float32)
-        return mu.numpy()[0]
+        return np.argmax(mu.numpy()[0])  # Ensure action is scalar for discrete action space
     
     def save_models(self):
         self.online_actor.save_model()
@@ -175,7 +175,7 @@ class DDPGAgent:
         states, actions, rewards, next_states, dones = self.memory.sample(self.batch_size)
         
         states = tf.convert_to_tensor(states, dtype=tf.float32)
-        actions = tf.one_hot(actions, self.config.action_dim, dtype=tf.float32)  # Convert actions to one-hot encoding
+        actions = tf.convert_to_tensor(actions, dtype=tf.int32)  # Ensure actions are int32 for discrete actions
         rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
         next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
         dones = tf.convert_to_tensor(dones, dtype=tf.bool)  # Ensure dones is boolean
